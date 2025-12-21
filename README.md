@@ -87,10 +87,14 @@ This repository's main runtime is the gap monitor app `bitcoin-trader.py`. The r
 **Start the monitor (recommended, tmux):**
 
 ```bash
-# Start a detached tmux session named 'btc-trader'
-# (requires tmux installed via Homebrew: `brew install tmux`)
+# Start attached (shows output immediately) — preferred for debugging:
+# (uses `conda run -n bitcoin-trader` so the conda env is activated reliably in non-interactive shells)
 
-tmux new -s btc-trader -d "conda run -n bitcoin-trader bash -lc 'python $(pwd)/bitcoin-trader.py --mode schedule > trader_run.log 2>&1'"
+tmux new -s btc-trader bash -lc "conda run -n bitcoin-trader --no-capture-output python /Users/ericsmith/Documents/bitcoin-trader/bitcoin-trader.py"
+
+# Or start detached and attach later (log to file):
+
+tmux new -d -s btc-trader bash -lc "conda run -n bitcoin-trader --no-capture-output python /Users/ericsmith/Documents/bitcoin-trader/bitcoin-trader.py >> /Users/ericsmith/Documents/bitcoin-trader/trader_run.log 2>&1"
 
 # Attach to the session to view output live
 tmux attach -t btc-trader
