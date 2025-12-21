@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 class PionexDownloader:
-    """Downloads and manages klines data from Pionex exchange."""
+    """Downloads and manages Bars data from Pionex exchange."""
     
     BASE_URL = "https://api.pionex.com"
     KLINES_ENDPOINT = "/api/v1/market/klines"
@@ -136,9 +136,6 @@ class PionexDownloader:
             logger.error(f"Unexpected error: {e}")
             return None
 
-    def get_klines(self, interval='4H', limit=500, start_time=None, end_time=None):
-        """Deprecated alias for `get_bars`."""
-        return self.get_bars(interval=interval, limit=limit, start_time=start_time, end_time=end_time)
     
     def save_to_csv(self, df, interval, append=True):
         """

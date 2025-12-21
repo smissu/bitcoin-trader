@@ -1,6 +1,6 @@
-# Pionex Klines Downloader 📥
+# Pionex Bars Downloader 📥
 
-A small Python utility to download OHLCV klines (candles) from Pionex and save them as CSV files. It supports multiple timeframes and can run in scheduled mode to fetch:
+A small Python utility to download OHLCV Bars (candles) from Pionex and save them as CSV files. It supports multiple timeframes and can run in scheduled mode to fetch:
 
 - 1-hour bars (`60M`) — downloaded every hour
 - 4-hour bars (`4H`) — downloaded every 4 hours
@@ -10,7 +10,7 @@ A small Python utility to download OHLCV klines (candles) from Pionex and save t
 
 ## ✅ Features
 
-- Download latest klines for configurable timeframes
+- Download latest Bars for configurable timeframes
 - Scheduled mode to automatically fetch at the correct times
 - Historical mode to fetch multiple days of data (request batching)
 - Safe CSV saving with de-duplication and append
