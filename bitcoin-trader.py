@@ -18,8 +18,12 @@ from typing import Optional, List
 from pionex_downloader import PionexDownloader
 from discord.messages import send_msg
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# Configure logging to both file and stdout
+log_handlers = [
+    logging.FileHandler('trader_run.log'),
+    logging.StreamHandler()
+]
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', handlers=log_handlers)
 logger = logging.getLogger('bitcoin-trader')
 
 GAPS_DIR = Path('gaps')
@@ -222,13 +226,28 @@ def main():
     signal.signal(signal.SIGINT, _shutdown)
     signal.signal(signal.SIGTERM, _shutdown)
 
-    # Loop
+    # Loop with a visible countdown in attached terminals
     logger.info('Scheduler started. Press Ctrl+C to stop.')
     try:
         while True:
+            # seconds until the next scheduled job (None when no jobs are present)
+            next_secs = schedule.idle_seconds()
+            if next_secs is None:
+                status = 'No scheduled jobs'
+            else:
+                status = f'Next check in {int(next_secs)}s'
+
+            # Print a concise status line to stdout so an attached tmux session shows a live countdown
+            print(f"\r{status} | Time: {datetime.utcnow().isoformat()}", end='', flush=True)
+
+            # Execute any pending jobs (this will also emit log lines)
             schedule.run_pending()
-            time.sleep(10)
+
+            # Sleep briefly to update the status frequently without excessive CPU usage
+            time.sleep(1)
     except KeyboardInterrupt:
+        # Ensure the status line ends with a newline before shutting down
+        print('\n')
         _shutdown(None, None)
 
 
