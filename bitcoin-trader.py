@@ -120,8 +120,10 @@ class GapStrategy:
         self.data_dir = data_dir
         self.recent_bars = recent_bars
 
-    def summarize_recent_gaps(self, timeframe: str, x: Optional[int] = None):
+    def summarize_recent_gaps(self, timeframe: str, x: Optional[int] = None, mode: str = None):
         """Summarize gaps found when scanning the last `x` bars for `timeframe`.
+
+        If `mode` is provided it will be forwarded to the detector (e.g. 'b2dir', 'open', 'body').
 
         Returns a dict: {count: int, gaps: [{time: str, type: str, low: float, high: float}, ...]}
         """
@@ -139,10 +141,105 @@ class GapStrategy:
         # slide window of size 3
         for i in range(2, len(last)):
             window = last.iloc[i-2:i+1]
-            res = self._detect_gap(window)
+            # pass mode if provided, otherwise let _detect_gap use its default
+            res = self._detect_gap(window, mode=mode) if mode is not None else self._detect_gap(window)
             if res is not None:
                 gaps_found.append({'time': res['start_time'].isoformat(), 'type': res['type'], 'low': res['gap_low'], 'high': res['gap_high']})
         return {'count': len(gaps_found), 'gaps': gaps_found}
+
+    def run_scan(self, timeframe: str, download_latest: bool = False, download_limit: int = 48, mode: str = None, dry_run: bool = False, verbose: bool = False, output_file: str = None):
+        """Run a single scan for a given timeframe.
+
+        Parameters mirror the script:
+         - download_latest: if True, fetch latest bars before scanning
+         - download_limit: how many bars to fetch when downloading
+         - mode: detection mode (forwarded to summarize_recent_gaps)
+         - dry_run: if True, don't record or send alerts, only preview
+         - verbose: if True, include 3-bar windows and detector output in print/output_file
+         - output_file: path to append verbose/dry-run lines for later analysis
+
+        Returns a dict with keys: count, gaps, actions (list of action strings taken or previewed)
+        """
+        actions = []
+        # Optionally download latest bars
+        if download_latest:
+            try:
+                self.downloader.download_latest(interval=timeframe, limit=download_limit)
+                actions.append(f"downloaded_latest:{download_limit}")
+            except Exception as e:
+                actions.append(f"download_failed:{e}")
+        # Summarize
+        summary = self.summarize_recent_gaps(timeframe, x=self.recent_bars, mode=mode)
+        # For each found gap, decide whether to record/send or preview
+        import pandas as pd
+        fname = Path(self.downloader.data_dir) / f"{self.symbol.lower()}_{timeframe.lower()}_pionex.csv"
+        df_full = None
+        if verbose and fname.exists():
+            try:
+                df_full = pd.read_csv(fname, index_col=0, parse_dates=True).sort_index()
+            except Exception:
+                df_full = None
+        for g in summary['gaps']:
+            found_time = datetime.fromisoformat(g['time'])
+            # Verbose lines
+            verbose_lines = []
+            if verbose and df_full is not None:
+                try:
+                    if found_time in df_full.index:
+                        idx = df_full.index.get_loc(found_time)
+                    else:
+                        idx = df_full.index.get_indexer([found_time], method='nearest')[0]
+                    start = max(0, idx - 2)
+                    window = df_full.iloc[start: idx + 1]
+                    verbose_lines.append('Verbose: candidate window:')
+                    for ti, row in window.iterrows():
+                        verbose_lines.append(f"  {ti.isoformat()}  O:{row['open']} H:{row['high']} L:{row['low']} C:{row['close']}")
+                    det = self._detect_gap(window, mode=mode) if mode is not None else self._detect_gap(window)
+                    verbose_lines.append(f"Verbose: detector output -> {det}")
+                except Exception as e:
+                    verbose_lines.append(f"Verbose: failed to prepare window: {e}")
+            # Check if already recorded
+            recorded = False
+            for r in self.gap_mgr._read_all():
+                r_tf = r.get('timeframe')
+                r_start = r.get('start_time') or r.get('start') or ''
+                try:
+                    r_dt = datetime.fromisoformat(r_start) if r_start else None
+                except Exception:
+                    r_dt = None
+                if r_tf == timeframe and r_dt is not None and r_dt == found_time:
+                    recorded = True
+                    break
+            preview = f"Found gap {timeframe} {g['type']} {g['low']} - {g['high']} at {g['time']}"
+            if dry_run:
+                actions.append(f"DRY-RUN: {preview}")
+                if output_file:
+                    try:
+                        with open(output_file, 'a') as of:
+                            of.write(f"DRY-RUN: {preview}\n")
+                            for vl in verbose_lines:
+                                of.write(vl + "\n")
+                            of.write("\n")
+                    except Exception:
+                        pass
+            else:
+                if not recorded:
+                    rec = self.gap_mgr.add_gap(timeframe, datetime.fromisoformat(g['time']), g['type'], g['low'], g['high'])
+                    msg = f"Gap found {rec.id} {timeframe} {g['type']} {g['low']} - {g['high']} at {g['time']}"
+                    actions.append(f"RECORDED: {msg}")
+                    send_msg(msg, strat='bitcoin-trader')
+                    if output_file:
+                        try:
+                            with open(output_file, 'a') as of:
+                                of.write(f"RECORDED: {msg}\n")
+                                for vl in verbose_lines:
+                                    of.write(vl + "\n")
+                                of.write("\n")
+                        except Exception:
+                            pass
+                else:
+                    actions.append(f"ALREADY_RECORDED: {preview}")
+        return {'count': summary['count'], 'gaps': summary['gaps'], 'actions': actions}
 
     def _fetch_last_n(self, interval: str, n: int = 3):
         df = self.downloader.get_bars(interval=interval, limit=n)
@@ -161,12 +258,15 @@ class GapStrategy:
         - 'strict' (default): b1/b2 must overlap; b3.body low > b2.body high (up) or b3.body high < b2.body low (down)
         - 'body': same as strict but uses candle 'body' min/max explicitly (same behavior as strict by default)
         - 'open': compares b3.open against b2.high/b2.low (more permissive)
-        
+        - 'b2dir': determines potential direction from the middle bar (b2). If b2 is an "up" bar (open < close)
+          then an UP gap exists if the entire b3 range is above the entire b1 range (no intersection): b3.low > b1.high.
+          If b2 is a "down" bar (open > close) then a DOWN gap exists if the entire b3 range is below the entire b1 range: b3.high < b1.low.
+
         Returns a dict with keys: type ('up'/'down'), gap_low, gap_high, start_time.
         """
         b1, b2, b3 = df.iloc[0], df.iloc[1], df.iloc[2]
 
-        # compute both full-range and body ranges
+        # compute full-range values
         b1_low, b1_high = float(b1['low']), float(b1['high'])
         b2_low, b2_high = float(b2['low']), float(b2['high'])
         b3_low, b3_high = float(b3['low']), float(b3['high'])
@@ -177,6 +277,19 @@ class GapStrategy:
         b1_low_b, b1_high_b = body_range(b1)
         b2_low_b, b2_high_b = body_range(b2)
         b3_low_b, b3_high_b = body_range(b3)
+
+        # New mode: use b2 direction and non-intersection between b3 and b1
+        if mode == 'b2dir':
+            # determine b2 direction by body
+            if float(b2['open']) < float(b2['close']):
+                # b2 is an up bar -> look for upward gap where b3 is entirely above b1
+                if b3_low > b1_high:
+                    return {'type': 'up', 'gap_low': float(b1_high), 'gap_high': float(b3_low), 'start_time': b3.name.to_pydatetime()}
+            elif float(b2['open']) > float(b2['close']):
+                # b2 is a down bar -> look for downward gap where b3 is entirely below b1
+                if b3_high < b1_low:
+                    return {'type': 'down', 'gap_low': float(b3_high), 'gap_high': float(b1_low), 'start_time': b3.name.to_pydatetime()}
+            return None
 
         # For strict mode use full high/low; for body mode use body ranges
         if mode == 'strict':
