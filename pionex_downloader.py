@@ -66,7 +66,7 @@ class PionexDownloader:
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(exist_ok=True)
         
-    def get_klines(self, interval='4H', limit=500, start_time=None, end_time=None):
+    def get_bars(self, interval='4H', limit=500, start_time=None, end_time=None):
         """
         Fetch Bars data from Pionex.
         
@@ -106,6 +106,7 @@ class PionexDownloader:
                 logger.error(f"API request failed: {data}")
                 return None
                 
+            # Note: API field name is 'klines' and must remain unchanged for the endpoint
             bars = data.get('data', {}).get('klines', [])
             
             if not bars:
@@ -134,6 +135,10 @@ class PionexDownloader:
         except Exception as e:
             logger.error(f"Unexpected error: {e}")
             return None
+
+    def get_klines(self, interval='4H', limit=500, start_time=None, end_time=None):
+        """Deprecated alias for `get_bars`."""
+        return self.get_bars(interval=interval, limit=limit, start_time=start_time, end_time=end_time)
     
     def save_to_csv(self, df, interval, append=True):
         """
@@ -178,7 +183,7 @@ class PionexDownloader:
             limit: Number of latest bars to fetch
         """
         logger.info(f"Downloading latest {interval} bars for {self.symbol}")
-        df = self.get_klines(interval=interval, limit=limit)
+        df = self.get_bars(interval=interval, limit=limit)
         
         if df is not None:
             self.save_to_csv(df, interval, append=True)
@@ -212,7 +217,7 @@ class PionexDownloader:
         current_start = start_time
         
         for i in range(num_requests):
-            df = self.get_klines(
+            df = self.get_bars(
                 interval=interval,
                 limit=500,
                 start_time=current_start,

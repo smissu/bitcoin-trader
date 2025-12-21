@@ -115,7 +115,7 @@ class GapStrategy:
         self.gap_mgr = GapManager()
 
     def _fetch_last_n(self, interval: str, n: int = 3):
-        df = self.downloader.get_klines(interval=interval, limit=n)
+        df = self.downloader.get_bars(interval=interval, limit=n)
         if df is None:
             return None
         # Ensure sorted by time
