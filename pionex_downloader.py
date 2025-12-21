@@ -193,7 +193,7 @@ class PionexDownloader:
         Download historical data for specified number of days.
         
         Args:
-            interval: Kline interval
+            interval: Bar interval
             days: Number of days of historical data
         """
         # Calculate time range
