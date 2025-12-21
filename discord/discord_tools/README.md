@@ -27,4 +27,18 @@ Notes
 
 - The bot requires the Message Content Intent to be enabled in the Discord Developer Portal.
 - The bot must be invited to the server and have Manage Messages permission in the target channel.
-- The folder and its `.secret_token` are added to `.gitignore to prevent accidental commits.
+- The folder and its `.secret_token` are added to `.gitignore` to prevent accidental commits.
+
+## Recommended secret handling
+
+Prefer environment variables for secrets. Examples:
+
+1. Create a `.env` file in the project root and add:
+
+```
+DISCORD_KEY=Bearer <your-token>
+```
+
+2. Or, to keep a local token file, copy `.secret_token.example` to `discord_tools/.secret_token` and add your token there. That file is ignored by git.
+
+`discord/messages.py` will read `DISCORD_KEY` from the environment using `python-dotenv` (recommended).
