@@ -112,11 +112,37 @@ class GapManager:
 class GapStrategy:
     """Main strategy implementation. Detects gaps and monitors them."""
 
-    def __init__(self, symbol='BTC_USDT', timeframes=None, data_dir='data'):
+    def __init__(self, symbol='BTC_USDT', timeframes=None, data_dir='data', recent_bars: int = 15):
         self.symbol = symbol
         self.timeframes = timeframes or ['60M', '4H', '1D']
         self.downloader = PionexDownloader(symbol=self.symbol, data_dir=data_dir)
         self.gap_mgr = GapManager()
+        self.data_dir = data_dir
+        self.recent_bars = recent_bars
+
+    def summarize_recent_gaps(self, timeframe: str, x: Optional[int] = None):
+        """Summarize gaps found when scanning the last `x` bars for `timeframe`.
+
+        Returns a dict: {count: int, gaps: [{time: str, type: str, low: float, high: float}, ...]}
+        """
+        x = x or self.recent_bars
+        # Load last X bars from CSV for the timeframe
+        filename = Path(self.downloader.data_dir) / f"{self.symbol.lower()}_{timeframe.lower()}_pionex.csv"
+        if not filename.exists():
+            return {'count': 0, 'gaps': []}
+
+        import pandas as pd
+        df = pd.read_csv(filename, index_col=0, parse_dates=True)
+        df = df.sort_index()
+        last = df.tail(x)
+        gaps_found = []
+        # slide window of size 3
+        for i in range(2, len(last)):
+            window = last.iloc[i-2:i+1]
+            res = self._detect_gap(window)
+            if res is not None:
+                gaps_found.append({'time': res['start_time'].isoformat(), 'type': res['type'], 'low': res['gap_low'], 'high': res['gap_high']})
+        return {'count': len(gaps_found), 'gaps': gaps_found}
 
     def _fetch_last_n(self, interval: str, n: int = 3):
         df = self.downloader.get_bars(interval=interval, limit=n)
@@ -192,6 +218,19 @@ class GapStrategy:
         # Monitor existing gaps using most recent bar
         latest_bar = df.iloc[-1]
         self._monitor_gaps_with_bar(interval, latest_bar)
+
+        # Summarize recent gaps over the last X bars and send a Discord message with history
+        try:
+            summary = self.summarize_recent_gaps(interval, x=self.recent_bars)
+            count = summary['count']
+            if count == 0:
+                msg = f"No gaps found in the last {self.recent_bars} bars for {interval}."
+            else:
+                times = ', '.join([g['time'] for g in summary['gaps']])
+                msg = f"{count} gaps in the last {self.recent_bars} bars for {interval}: {times}"
+            send_msg(msg, strat='bitcoin-trader')
+        except Exception as e:
+            logger.error(f"Error summarizing recent gaps for {interval}: {e}")
 
 
 def main():
