@@ -154,39 +154,62 @@ class GapStrategy:
             return None
         return df.tail(n)
 
-    def _detect_gap(self, df):
+    def _detect_gap(self, df, mode: str = 'strict'):
         """Detects a gap using last three bars. Returns dict or None.
 
-        Criteria used:
-        - Let bars be [b1, b2, b3] where b3 is the most recent.
-        - Require b1 and b2 to overlap (no gap between them) to ensure the gap is new.
-        - A gap exists if b3.low > b2.high (up gap) or b3.high < b2.low (down gap).
+        Modes supported:
+        - 'strict' (default): b1/b2 must overlap; b3.body low > b2.body high (up) or b3.body high < b2.body low (down)
+        - 'body': same as strict but uses candle 'body' min/max explicitly (same behavior as strict by default)
+        - 'open': compares b3.open against b2.high/b2.low (more permissive)
+        
+        Returns a dict with keys: type ('up'/'down'), gap_low, gap_high, start_time.
         """
         b1, b2, b3 = df.iloc[0], df.iloc[1], df.iloc[2]
-        # Check b1/b2 overlap
-        overlap = not (b1['high'] < b2['low'] or b1['low'] > b2['high'])
+
+        # compute both full-range and body ranges
+        b1_low, b1_high = float(b1['low']), float(b1['high'])
+        b2_low, b2_high = float(b2['low']), float(b2['high'])
+        b3_low, b3_high = float(b3['low']), float(b3['high'])
+
+        def body_range(b):
+            return float(min(b['open'], b['close'])), float(max(b['open'], b['close']))
+
+        b1_low_b, b1_high_b = body_range(b1)
+        b2_low_b, b2_high_b = body_range(b2)
+        b3_low_b, b3_high_b = body_range(b3)
+
+        # For strict mode use full high/low; for body mode use body ranges
+        if mode == 'strict':
+            # overlap using full ranges
+            overlap = not (b1_high < b2_low or b1_low > b2_high)
+            if not overlap:
+                return None
+            # Up gap using full lows/highs
+            if b3_low > b2_high:
+                return {'type': 'up', 'gap_low': float(b2_high), 'gap_high': float(b3_low), 'start_time': b3.name.to_pydatetime()}
+            if b3_high < b2_low:
+                return {'type': 'down', 'gap_low': float(b3_high), 'gap_high': float(b2_low), 'start_time': b3.name.to_pydatetime()}
+            return None
+
+        if mode == 'open':
+            # use open price of b3 compared to full b2 high/low
+            if b3['open'] > b2_high:
+                return {'type': 'up', 'gap_low': float(b2_high), 'gap_high': float(b3['open']), 'start_time': b3.name.to_pydatetime()}
+            if b3['open'] < b2_low:
+                return {'type': 'down', 'gap_low': float(b3['open']), 'gap_high': float(b2_low), 'start_time': b3.name.to_pydatetime()}
+            return None
+
+        # body mode (default if mode == 'body')
+        # overlap using body ranges
+        overlap = not (b1_high_b < b2_low_b or b1_low_b > b2_high_b)
         if not overlap:
             return None
-        # Up gap
-        if b3['low'] > b2['high']:
-            gap_low = float(b2['high'])
-            gap_high = float(b3['low'])
-            return {
-                'type': 'up',
-                'gap_low': gap_low,
-                'gap_high': gap_high,
-                'start_time': b3.name.to_pydatetime()
-            }
-        # Down gap
-        if b3['high'] < b2['low']:
-            gap_low = float(b3['high'])
-            gap_high = float(b2['low'])
-            return {
-                'type': 'down',
-                'gap_low': gap_low,
-                'gap_high': gap_high,
-                'start_time': b3.name.to_pydatetime()
-            }
+
+        if b3_low_b > b2_high_b:
+            return {'type': 'up', 'gap_low': float(b2_high_b), 'gap_high': float(b3_low_b), 'start_time': b3.name.to_pydatetime()}
+        if b3_high_b < b2_low_b:
+            return {'type': 'down', 'gap_low': float(b3_high_b), 'gap_high': float(b2_low_b), 'start_time': b3.name.to_pydatetime()}
+
         return None
 
     def _monitor_gaps_with_bar(self, interval: str, bar):
