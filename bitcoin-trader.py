@@ -91,7 +91,7 @@ class GapManager:
         rows = self._read_all()
         updated = False
         for r in rows:
-            if r['id'] == gap_id and r['status'] == 'open':
+            if r.get('id') == gap_id and r.get('status') == 'open':
                 r['status'] = 'closed'
                 r['closed_time'] = closed_time.isoformat()
                 r['close_price'] = f"{float(close_price):.8f}"
@@ -106,7 +106,7 @@ class GapManager:
 
     def list_open_gaps(self) -> List[GapRecord]:
         rows = self._read_all()
-        return [GapRecord(**r) for r in rows if r['status'] == 'open']
+        return [GapRecord(**r) for r in rows if r.get('status') == 'open']
 
 
 class GapStrategy:
@@ -342,6 +342,13 @@ class GapStrategy:
 
     def process_interval(self, interval: str):
         logger.info(f"Processing interval {interval}")
+        # Ensure CSV is refreshed with latest bars before detection and monitoring
+        try:
+            self.downloader.download_latest(interval=interval, limit=48)
+            logger.debug(f"Downloaded latest bars for {interval} at start of process_interval")
+        except Exception as e:
+            logger.warning(f"Failed to download latest bars for {interval} at start of process_interval: {e}")
+
         df = self._fetch_last_n(interval, n=3)
         if df is None:
             logger.debug(f"Not enough data for {interval}")
@@ -362,8 +369,11 @@ class GapStrategy:
             if count == 0:
                 msg = f"No gaps found in the last {self.recent_bars} bars for {interval}."
             else:
-                times = ', '.join([g['time'] for g in summary['gaps']])
-                msg = f"{count} gaps in the last {self.recent_bars} bars for {interval}: {times}"
+                # Build a more detailed summary listing times and low/high for each gap
+                gap_lines = []
+                for g in summary['gaps']:
+                    gap_lines.append(f"{g['time']} {g['type'].upper()} low={g['low']} high={g['high']}")
+                msg = f"{count} gaps in the last {self.recent_bars} bars for {interval}:\n" + "\n".join(gap_lines)
             send_msg(msg, strat='bitcoin-trader')
         except Exception as e:
             logger.error(f"Error summarizing recent gaps for {interval}: {e}")
@@ -405,15 +415,41 @@ def main():
     logger.info('Scheduler started. Press Ctrl+C to stop.')
     try:
         while True:
-            # seconds until the next scheduled job (None when no jobs are present)
-            next_secs = schedule.idle_seconds()
-            if next_secs is None:
-                status = 'No scheduled jobs'
-            else:
-                status = f'Next check in {int(next_secs)}s'
+            # Display per-timeframe countdowns to the next scheduled job run
+            now = datetime.utcnow()
+            # Find the minimum next_run for each timeframe (jobs can be duplicated)
+            next_by_tf = {}
+            for job in schedule.jobs:
+                try:
+                    args = getattr(job.job_func, 'args', None) or getattr(job, 'args', None)
+                    tf = args[0] if args else None
+                except Exception:
+                    tf = None
+                if tf is None:
+                    continue
+                if getattr(job, 'next_run', None):
+                    delta = (job.next_run - now).total_seconds()
+                    if delta < 0:
+                        delta = 0
+                    prev = next_by_tf.get(tf)
+                    if prev is None or delta < prev:
+                        next_by_tf[tf] = delta
 
-            # Print a concise status line to stdout so an attached tmux session shows a live countdown
-            print(f"\r{status} | Time: {datetime.utcnow().isoformat()}", end='', flush=True)
+            lines = ['Next Data Download:']
+            # Keep configured timeframes ordering when possible
+            for tf in strategy.timeframes:
+                secs = int(next_by_tf.get(tf, 0))
+                hours = secs // 3600
+                mins = (secs % 3600) // 60
+                lines.append(f"- {tf}: {hours:02d}:{mins:02d} hr:min")
+
+            # Clear screen (simple) and print the multi-line status so tmux shows a live countdown block
+            try:
+                print("\033[2J\033[H", end='')
+            except Exception:
+                pass
+            print("\n".join(lines))
+            print(f"Time: {datetime.utcnow().isoformat()}\n", end='', flush=True)
 
             # Execute any pending jobs (this will also emit log lines)
             schedule.run_pending()
