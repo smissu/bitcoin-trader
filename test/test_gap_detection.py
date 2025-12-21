@@ -1,11 +1,17 @@
 import importlib.util
 from datetime import datetime, timedelta
 import pandas as pd
+import sys, os
+from pathlib import Path
 
 import pytest
 
+# Ensure project root is on sys.path so imports inside the module work
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT))
+
 # Dynamically import the module with hyphenated filename
-spec = importlib.util.spec_from_file_location("bitcoin_trader_mod", "./bitcoin-trader.py")
+spec = importlib.util.spec_from_file_location("bitcoin_trader_mod", PROJECT_ROOT / "bitcoin-trader.py")
 mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
 
