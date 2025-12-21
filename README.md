@@ -1,6 +1,11 @@
-# Pionex Bars Downloader 📥
+# Bitcoin Trader — Gap Monitor 📥
 
-A small Python utility to download OHLCV Bars (candles) from Pionex and save them as CSV files. It supports multiple timeframes and can run in scheduled mode to fetch:
+Main app: `bitcoin-trader.py` (gap monitoring strategy). This repository contains two primary components:
+
+- **`bitcoin-trader.py`** — the gap monitoring strategy that uses Pionex bar data, detects gaps, sends Discord alerts, and records gaps to `gaps/gaps.csv`.
+- **`pionex_downloader.py`** — helper utility that fetches OHLCV Bars from Pionex and saves CSV files (used by the strategy).
+
+The project fetches OHLCV Bars (candles) and supports multiple timeframes in scheduled mode:
 
 - 1-hour bars (`60M`) — downloaded every hour
 - 4-hour bars (`4H`) — downloaded every 4 hours
@@ -22,14 +27,19 @@ A small Python utility to download OHLCV Bars (candles) from Pionex and save the
 
 - Python 3.11 (conda environment recommended)
 - Packages: `requests`, `pandas`, `schedule`
+- `tmux` (optional but *recommended* for running the scheduler in a managed session) — install via Homebrew:
 
-You can install dependencies with pip:
+```bash
+brew install tmux
+```
+
+You can install Python dependencies with pip:
 
 ```bash
 pip install requests pandas schedule
 ```
 
-Or use your existing `conda` environment (this project was tested in `btc-trader` conda env).
+Or use your existing `conda` environment (this project was tested in `bitcoin-trader` conda env).
 
 ---
 
@@ -67,6 +77,43 @@ Options:
 - `--symbol` default: `BTC_USDT`
 - `--timeframes` default: `60M 4H 1D` (accepted formats: `60M`, `4H`, `1D`, also `1h`, `daily` map internally)
 - `--data-dir` default: `data`
+
+---
+
+## ▶️ Running the strategy (tmux recommended)
+
+This repository's main runtime is the gap monitor app `bitcoin-trader.py`. The recommended way to run the scheduler on a machine you control is under `tmux` so you can detach/reattach and inspect logs.
+
+**Start the monitor (recommended, tmux):**
+
+```bash
+# Start a detached tmux session named 'btc-trader'
+# (requires tmux installed via Homebrew: `brew install tmux`)
+
+tmux new -s btc-trader -d "conda run -n bitcoin-trader bash -lc 'python $(pwd)/bitcoin-trader.py --mode schedule > trader_run.log 2>&1'"
+
+# Attach to the session to view output live
+tmux attach -t btc-trader
+```
+
+**Alternative: nohup (simple background):**
+
+```bash
+nohup conda run -n bitcoin-trader python $(pwd)/bitcoin-trader.py --mode schedule > trader_run.log 2>&1 &
+echo $! > trader.pid
+tail -f trader_run.log
+```
+
+**Quick local test (run once):**
+
+```bash
+conda run -n bitcoin-trader python bitcoin-trader.py --mode once --timeframes 60M 4H 1D
+```
+
+**Monitoring helpers:**
+
+- `scripts/monitor_logs.py` — watches `trader_run.log` for ERROR/Exception/Gap events and writes a short `monitor_report.log` (runs 30 minutes by default).
+- `scripts/live_test_session.py` — runs a short monitored live test and sends start/stop Discord messages.
 
 ---
 
