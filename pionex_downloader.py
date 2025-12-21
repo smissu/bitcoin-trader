@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Pionex Data Downloader
-Downloads OHLCV klines data from Pionex at scheduled intervals.
+Downloads OHLCV Bars data from Pionex at scheduled intervals.
 Supports multiple timeframes: 60M (hourly), 4H (4-hour), 1D (daily)
 """
 
@@ -68,11 +68,11 @@ class PionexDownloader:
         
     def get_klines(self, interval='4H', limit=500, start_time=None, end_time=None):
         """
-        Fetch klines data from Pionex.
+        Fetch Bars data from Pionex.
         
         Args:
-            interval: Kline interval (1M, 5M, 15M, 30M, 60M, 4H, 8H, 12H, 1D)
-            limit: Number of klines to fetch (default 100, max 500)
+            interval: Bar interval (1M, 5M, 15M, 30M, 60M, 4H, 8H, 12H, 1D)
+            limit: Number of bars to fetch (default 100, max 500)
             start_time: Start time in milliseconds
             end_time: End time in milliseconds
             
@@ -95,7 +95,7 @@ class PionexDownloader:
             
         try:
             url = f"{self.BASE_URL}{self.KLINES_ENDPOINT}"
-            logger.info(f"Fetching {interval} klines for {self.symbol} (limit={limit})")
+            logger.info(f"Fetching {interval} Bars for {self.symbol} (limit={limit})")
             
             response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()
@@ -106,14 +106,14 @@ class PionexDownloader:
                 logger.error(f"API request failed: {data}")
                 return None
                 
-            klines = data.get('data', {}).get('klines', [])
+            bars = data.get('data', {}).get('klines', [])
             
-            if not klines:
-                logger.warning("No klines data returned")
+            if not bars:
+                logger.warning("No Bars data returned")
                 return None
                 
             # Convert to DataFrame
-            df = pd.DataFrame(klines)
+            df = pd.DataFrame(bars)
             
             # Convert time to datetime
             df['time'] = pd.to_datetime(df['time'], unit='ms')
@@ -125,7 +125,7 @@ class PionexDownloader:
             # Set time as index
             df.set_index('time', inplace=True)
             
-            logger.info(f"Successfully fetched {len(df)} klines")
+            logger.info(f"Successfully fetched {len(df)} Bars")
             return df
             
         except requests.exceptions.RequestException as e:
@@ -171,11 +171,11 @@ class PionexDownloader:
     
     def download_latest(self, interval='4H', limit=10):
         """
-        Download the latest klines and append to CSV.
+        Download the latest Bars and append to CSV.
         
         Args:
-            interval: Kline interval
-            limit: Number of latest klines to fetch
+            interval: Bar interval
+            limit: Number of latest bars to fetch
         """
         logger.info(f"Downloading latest {interval} bars for {self.symbol}")
         df = self.get_klines(interval=interval, limit=limit)
@@ -319,7 +319,7 @@ def main():
     """Main entry point."""
     import argparse
     
-    parser = argparse.ArgumentParser(description='Pionex Klines Downloader')
+    parser = argparse.ArgumentParser(description='Pionex Bars Downloader')
     parser.add_argument('--symbol', default='BTC_USDT', help='Trading pair symbol')
     parser.add_argument('--timeframes', nargs='+', default=['60M', '4H', '1D'],
                         help='Timeframes to download (e.g., 60M 4H 1D)')
