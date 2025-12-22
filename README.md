@@ -98,8 +98,73 @@ tmux new -d -s btc-trader bash -lc "conda run -n bitcoin-trader --no-capture-out
 
 # Attach to the session to view output live
 tmux attach -t btc-trader
+
+### Detach a tmux session from another terminal 🔧
+If you need to detach an attached tmux client from a different terminal (for example, to take over the session or stop an attached user), use the following commands from *another* terminal window:
+
+- List active sessions:
+
+```bash
+tmux ls
 ```
 
+- List clients (shows attached terminals):
+
+```bash
+tmux list-clients
+```
+
+- Detach *all* clients from a session (non-destructive):
+
+```bash
+tmux detach-client -a -s btc-trader
+# shorthand: tmux detach -a -s btc-trader
+```
+
+- Detach a *specific* client (use the client name from `tmux list-clients`):
+
+```bash
+tmux detach-client -t <client-name>
+```
+
+- If you want to stop the session entirely (destructive):
+
+```bash
+tmux kill-session -t btc-trader
+```
+
+Note: run these commands as the same user that owns the tmux server, or point at the correct socket with `-S /path/to/socket` if necessary.
+```
+
+**Optional helper: start script**
+
+A convenience script `scripts/start_btc_trader.sh` is included to simplify starting the monitor under tmux. It supports attached and detached modes, custom session names, and log redirection.
+
+Usage examples:
+
+```bash
+# start attached (interactive)
+./scripts/start_btc_trader.sh
+
+# start detached and log to ./trader_run.log
+./scripts/start_btc_trader.sh -d
+
+# start detached with a custom session name and log file
+./scripts/start_btc_trader.sh -d -s my-session -l /path/to/my_trader.log
+
+# start detached and override the number of recent bars used in summary messages
+./scripts/start_btc_trader.sh -d -r 30  # pass --recent-bars 30 to the strategy
+
+# start detached and force display timezone used in messages (e.g. Europe/Berlin or UTC+1)
+./scripts/start_btc_trader.sh -d -z Europe/Berlin  # messages will show local times in Europe/Berlin (CET/CEST)
+
+# show local-time-only format (omit the UTC part):
+./scripts/start_btc_trader.sh -d -z Europe/Berlin -f local  # messages show local times only (e.g., @19DEC25 - 09:00 CET)
+```
+
+Note: when the app performs its initial pass on startup it prints already-closed gaps to the terminal and logs them instead of sending Discord notifications (this prevents a flood of "Gap closed" Discord messages at startup). If you prefer the old behavior, scheduled closures still send Discord messages as before. The default summary window uses the last **20** bars; override this with `--recent-bars` on the command line or by passing `recent_bars` when creating `GapStrategy`. The default detector mode is now **b2dir** (this treats a mid-bar directional move as a gap when the next bar does not intersect the prior bar). Override with `--detector-mode` if needed.
+
+Note: `Gap found` messages now include timestamps, for example: `Gap found G00073 60M up 88658.22 - 88712.11 @21DEC25 - 13:00:00 UTC (14:00 CET)`. Messages show the gap's start bar time in **UTC** and also include your local timezone (so they match chart labels shown in your trading client). If you run the app in a different timezone, the parenthesized local time will reflect the system local timezone.
 **Alternative: nohup (simple background):**
 
 ```bash
@@ -111,9 +176,12 @@ tail -f trader_run.log
 **Quick local test (run once):**
 
 ```bash
+# run once with default settings (default recent_bars: 20)
 conda run -n bitcoin-trader python bitcoin-trader.py --mode once --timeframes 60M 4H 1D
-```
 
+# or override the recent bars window used in summary messages:
+conda run -n bitcoin-trader python bitcoin-trader.py --mode once --timeframes 60M 4H 1D --recent-bars 30
+```
 **Monitoring helpers:**
 
 - `scripts/monitor_logs.py` — watches `trader_run.log` for ERROR/Exception/Gap events and writes a short `monitor_report.log` (runs 30 minutes by default).
