@@ -36,7 +36,7 @@ def test_process_interval_calls_download_and_sends_summary(tmp_path, monkeypatch
     now = datetime(2025, 12, 21, 12, 0)
     make_csv(csv_file, now)
 
-    gs = GapStrategy(symbol='BTC_USDT', data_dir=str(data_dir), recent_bars=5)
+    gs = GapStrategy(symbol='BTC_USDT', data_dir=str(data_dir), recent_bars=5, detector_mode='strict')
     # use a temp gaps CSV so tests don't touch repo gaps file
     gs.gap_mgr = mod.GapManager(csv_path=data_dir / 'gaps_test.csv')
 

@@ -17,8 +17,26 @@ discord_key = os.getenv('discord_key')
 # Configure logging for discord_msgs
 logger = logging.getLogger(__name__)
 
-def send_msg(msg, strat='orb', toPrint=False, timeout=5):
+def send_msg(msg, strat='orb', toPrint=False, timeout=5, include_provenance=True):
+    """Send a Discord message via webhook.
+
+    If include_provenance is True, the message will be appended with a short provenance
+    string containing the script name, PID, and hostname to help trace which process
+    sent the notification.
+    """
     # print(f'sending message: {msg}')
+
+    # Build provenance string when requested
+    prov_str = ''
+    if include_provenance:
+        try:
+            import sys
+            import socket
+            from pathlib import Path
+            script = Path(sys.argv[0]).name if len(sys.argv) > 0 else ''
+            prov_str = f" [src:{script} pid:{os.getpid()} host:{socket.gethostname()}]"
+        except Exception:
+            prov_str = ''
 
     bot_url = None
     if strat == 'bitcoin-trader':
@@ -31,12 +49,13 @@ def send_msg(msg, strat='orb', toPrint=False, timeout=5):
         logger.error(f'No Discord webhook URL configured for strategy "{strat}"')
         return False
 
+    content = f"{msg}{prov_str}"
     payload = {
-        "content": f"{msg}",
+        "content": content,
     }
 
     headers = {
-        "Authorization" : discord_key
+        "Authorization": discord_key
     }
     try:
         # Use a short timeout to avoid shutdown blocking indefinitely
@@ -45,6 +64,7 @@ def send_msg(msg, strat='orb', toPrint=False, timeout=5):
             logger.error(f'Discord API error: {res.status_code} - {res.text}')
             return False
         else:
+            logger.info(f'Discord message sent: {content}')
             logger.debug(f'Discord message sent successfully: {msg}')
             return True
     except Exception as e:
@@ -52,7 +72,7 @@ def send_msg(msg, strat='orb', toPrint=False, timeout=5):
         return False
     finally:
         if toPrint:
-            print(f'{msg}')
+            print(content)
 
 def speak_msg(msg):
 
