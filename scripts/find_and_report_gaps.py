@@ -44,6 +44,8 @@ parser.add_argument('--download-limit', type=int, default=48,
                     help='Number of latest bars to fetch when using --download-latest (default: 48)')
 parser.add_argument('--dry-run', action='store_true',
                     help='If set, only print found gaps and do not record or send Discord messages')
+parser.add_argument('--display-tz', type=str, default=None, help='Display timezone (IANA name like Europe/Berlin or UTC+1). If omitted, uses system local timezone')
+parser.add_argument('--display-tz-format', type=str, choices=['full','local'], default='full', help='How to format displayed times: "full" = UTC + (local), "local" = local time only')
 parser.add_argument('--verbose', action='store_true',
                     help='If set, print the 3-bar window for each candidate gap and the detector output')
 parser.add_argument('--output-file', type=str, default=None,
@@ -144,7 +146,59 @@ for tf in timeframes:
             else:
                 # add gap to CSV
                 rec = manager.add_gap(tf, found_time, g['type'], g['low'], g['high'])
-                msg = f"Gap found {rec.id} {tf} {g['type']} {g['low']} - {g['high']} at {found_time.isoformat()}"
+                # format short timestamp for messages (include UTC and configured display tz)
+                date_str = found_time.strftime('%d%b%y').upper()
+                from datetime import timezone
+                if found_time.tzinfo is None:
+                    found_utc = found_time.replace(tzinfo=timezone.utc)
+                else:
+                    found_utc = found_time.astimezone(timezone.utc)
+                # determine display tz from args if provided
+                if args.display_tz:
+                    # parse same-style tz strings
+                    def _parse_display_tz_local(tzstr: str):
+                        try:
+                            from zoneinfo import ZoneInfo
+                        except Exception:
+                            ZoneInfo = None
+                        if ZoneInfo is not None:
+                            try:
+                                return ZoneInfo(tzstr)
+                            except Exception:
+                                pass
+                        if tzstr.upper().startswith('UTC'):
+                            off = tzstr[3:]
+                            sign = 1
+                            if off.startswith('+'):
+                                sign = 1
+                                off = off[1:]
+                            elif off.startswith('-'):
+                                sign = -1
+                                off = off[1:]
+                            parts = off.split(':')
+                            try:
+                                hours = int(parts[0]) if parts[0] else 0
+                                mins = int(parts[1]) if len(parts) > 1 else 0
+                                from datetime import timezone, timedelta
+                                return timezone(timedelta(hours=sign*hours, minutes=sign*mins))
+                            except Exception:
+                                return None
+                        return None
+                    disp_tz = _parse_display_tz_local(args.display_tz)
+                    if disp_tz:
+                        found_local = found_utc.astimezone(disp_tz)
+                    else:
+                        found_local = found_utc.astimezone()
+                else:
+                    found_local = found_utc.astimezone()
+                utc_str = found_utc.strftime('%H:%M:%S UTC')
+                local_str = found_local.strftime('%H:%M:%S %Z')
+                # respect requested format
+                if args.display_tz_format == 'local':
+                    when = f"@{date_str} - {found_local.strftime('%H:%M %Z')}"
+                else:
+                    when = f"@{date_str} - {utc_str} ({local_str})"
+                msg = f"Gap found {rec.id} {tf} {g['type']} {g['low']} - {g['high']} {when} at {found_time.isoformat()}"
                 print('Recording & sending:', msg)
                 dm.send_msg(msg, strat='bitcoin-trader')
                 if args.output_file:

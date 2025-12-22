@@ -17,7 +17,7 @@ discord_key = os.getenv('discord_key')
 # Configure logging for discord_msgs
 logger = logging.getLogger(__name__)
 
-def send_msg(msg, strat='orb', toPrint=False):
+def send_msg(msg, strat='orb', toPrint=False, timeout=5):
     # print(f'sending message: {msg}')
 
     bot_url = None
@@ -25,11 +25,11 @@ def send_msg(msg, strat='orb', toPrint=False):
         bot_url = "https://discord.com/api/webhooks/1452228163580198943/RPYtHFA79iJ31qKotlDkhNmzkuJcEyLDVoDshsTQMF5qPqh7flHbXbsOIk2Xm1-4Km20"
     else:
         logger.warning(f'Unknown strategy "{strat}" for Discord message: {msg}')
-        return
+        return False
 
     if bot_url is None:
         logger.error(f'No Discord webhook URL configured for strategy "{strat}"')
-        return
+        return False
 
     payload = {
         "content": f"{msg}",
@@ -38,17 +38,21 @@ def send_msg(msg, strat='orb', toPrint=False):
     headers = {
         "Authorization" : discord_key
     }
-    try: 
-        res = requests.post(bot_url, json=payload, headers=headers)
+    try:
+        # Use a short timeout to avoid shutdown blocking indefinitely
+        res = requests.post(bot_url, json=payload, headers=headers, timeout=timeout)
         if res.status_code not in [200, 204]:
             logger.error(f'Discord API error: {res.status_code} - {res.text}')
+            return False
         else:
             logger.debug(f'Discord message sent successfully: {msg}')
+            return True
     except Exception as e:
         logger.error(f'Error sending Discord message: {e}')
-
-    if toPrint:
-        print(f'{msg}')
+        return False
+    finally:
+        if toPrint:
+            print(f'{msg}')
 
 def speak_msg(msg):
 
