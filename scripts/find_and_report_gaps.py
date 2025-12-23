@@ -46,6 +46,7 @@ parser.add_argument('--dry-run', action='store_true',
                     help='If set, only print found gaps and do not record or send Discord messages')
 parser.add_argument('--display-tz', type=str, default=None, help='Display timezone (IANA name like Europe/Berlin or UTC+1). If omitted, uses system local timezone')
 parser.add_argument('--display-tz-format', type=str, choices=['full','local'], default='full', help='How to format displayed times: "full" = UTC + (local), "local" = local time only')
+parser.add_argument('--gap-type', type=str, choices=['both','up','down'], default='both', help='Which gap types to include in the scan (default: both)')
 parser.add_argument('--verbose', action='store_true',
                     help='If set, print the 3-bar window for each candidate gap and the detector output')
 parser.add_argument('--output-file', type=str, default=None,
@@ -69,7 +70,7 @@ for tf in timeframes:
         except Exception as e:
             print(f"Warning: failed to download latest bars for {tf}: {e}")
 
-    summary = strategy.summarize_recent_gaps(tf, x=strategy.recent_bars, mode=args.mode)
+    summary = strategy.summarize_recent_gaps(tf, x=strategy.recent_bars, mode=args.mode, gap_type=args.gap_type)
     count = summary['count']
     if count == 0:
         print(f'No gaps found in last {strategy.recent_bars} bars for {tf} using mode {mode_str}.')

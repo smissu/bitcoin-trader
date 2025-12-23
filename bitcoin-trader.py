@@ -237,7 +237,7 @@ class GapManager:
 class GapStrategy:
     """Main strategy implementation. Detects gaps and monitors them."""
 
-    def __init__(self, symbol='BTC_USDT', timeframes=None, data_dir='data', recent_bars: int = 20, detector_mode: str = 'b2dir', display_tz = None, display_tz_format: str = 'full'):
+    def __init__(self, symbol='BTC_USDT', timeframes=None, data_dir='data', recent_bars: int = 20, detector_mode: str = 'b2dir', display_tz = None, display_tz_format: str = 'full', summary_gap_type: str = 'both'):
         """Create a GapStrategy.
 
         recent_bars: how many recent bars to include in summary messages (default: 20)
@@ -254,8 +254,13 @@ class GapStrategy:
         self.detector_mode = detector_mode
         self.display_tz = display_tz
         self.display_tz_format = display_tz_format
+        self.summary_gap_type = summary_gap_type
 
-    def summarize_recent_gaps(self, timeframe: str, x: Optional[int] = None, mode: str = None):
+    def summarize_recent_gaps(self, timeframe: str, x: Optional[int] = None, mode: str = None, gap_type: Optional[str] = 'both'):
+        """Summarize recent gaps, optionally filtering by gap type.
+
+        gap_type: 'both' (default), 'up', or 'down'.
+        """
         """Summarize gaps found when scanning the last `x` bars for `timeframe`.
 
         If `mode` is provided it will be forwarded to the detector (e.g. 'b2dir', 'open', 'body').
@@ -279,10 +284,12 @@ class GapStrategy:
             # pass mode if provided, otherwise let _detect_gap use its default
             res = self._detect_gap(window, mode=mode) if mode is not None else self._detect_gap(window)
             if res is not None:
-                gaps_found.append({'time': res['start_time'].isoformat(), 'type': res['type'], 'low': res['gap_low'], 'high': res['gap_high']})
+                # filter by requested gap_type
+                if gap_type in (None, 'both') or res['type'] == gap_type:
+                    gaps_found.append({'time': res['start_time'].isoformat(), 'type': res['type'], 'low': res['gap_low'], 'high': res['gap_high']})
         return {'count': len(gaps_found), 'gaps': gaps_found}
 
-    def run_scan(self, timeframe: str, download_latest: bool = False, download_limit: int = 48, mode: str = None, dry_run: bool = False, verbose: bool = False, output_file: str = None):
+    def run_scan(self, timeframe: str, download_latest: bool = False, download_limit: int = 48, mode: str = None, gap_type: str = 'both', dry_run: bool = False, verbose: bool = False, output_file: str = None):
         """Run a single scan for a given timeframe.
 
         Parameters mirror the script:
@@ -304,7 +311,7 @@ class GapStrategy:
             except Exception as e:
                 actions.append(f"download_failed:{e}")
         # Summarize
-        summary = self.summarize_recent_gaps(timeframe, x=self.recent_bars, mode=mode)
+        summary = self.summarize_recent_gaps(timeframe, x=self.recent_bars, mode=mode, gap_type=gap_type)
         # For each found gap, decide whether to record/send or preview
         import pandas as pd
         fname = Path(self.downloader.data_dir) / f"{self.symbol.lower()}_{timeframe.lower()}_pionex.csv"
@@ -554,7 +561,7 @@ class GapStrategy:
         # Summarize recent gaps over the last X bars and send a Discord message with history
         try:
             # Use the strategy's configured detector mode for summaries so summary results match detection
-            summary = self.summarize_recent_gaps(interval, x=self.recent_bars, mode=self.detector_mode)
+            summary = self.summarize_recent_gaps(interval, x=self.recent_bars, mode=self.detector_mode, gap_type=getattr(self,'summary_gap_type','both'))
             count = summary['count']
             if count == 0:
                 msg = f"No gaps found in the last {self.recent_bars} bars for {interval}."
@@ -637,6 +644,7 @@ def main():
     parser.add_argument('--detector-mode', type=str, default=None, choices=['strict','body','open','b2dir'], help='Gap detector mode to use (default: b2dir)')
     parser.add_argument('--display-tz', type=str, default=None, help='Display timezone (IANA name like Europe/Berlin or UTC+1). If omitted, uses system local timezone')
     parser.add_argument('--display-tz-format', type=str, choices=['full','local'], default=None, help='How to format displayed times: "full" = UTC + (local), "local" = local time only')
+    parser.add_argument('--summary-gaps', type=str, choices=['both','up','down'], default='both', help='Which gap types to include in per-interval summaries (default: both)')
     args = parser.parse_args()
 
     # instantiate strategy with optional overrides
@@ -654,6 +662,8 @@ def main():
     # display tz format: full vs local
     if args.display_tz_format is not None:
         kwargs['display_tz_format'] = args.display_tz_format
+    if args.summary_gaps is not None:
+        kwargs['summary_gap_type'] = args.summary_gaps
 
     strategy = GapStrategy(**kwargs)
 

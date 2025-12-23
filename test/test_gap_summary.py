@@ -45,3 +45,11 @@ def test_summarize_recent_gaps(tmp_path):
     assert summary['count'] == 2
     assert len(summary['gaps']) == 2
     assert 'type' in summary['gaps'][0]
+
+    # Filter to only 'up' gaps
+    up_summary = strat.summarize_recent_gaps(tf, x=6, gap_type='up')
+    assert up_summary['count'] == 2
+
+    # Filter to only 'down' gaps (none expected)
+    down_summary = strat.summarize_recent_gaps(tf, x=6, gap_type='down')
+    assert down_summary['count'] == 0
