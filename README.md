@@ -77,6 +77,7 @@ Options:
 - `--symbol` default: `BTC_USDT`
 - `--timeframes` default: `60M 4H 1D` (accepted formats: `60M`, `4H`, `1D`, also `1h`, `daily` map internally)
 - `--data-dir` default: `data`
+- `--summary-gaps` default: `both` — which gap types to include in periodic summaries (`both`, `up`, or `down`)
 
 ---
 
@@ -94,7 +95,10 @@ tmux new -s btc-trader bash -lc "conda run -n bitcoin-trader --no-capture-output
 
 # Or start detached and attach later (log to file):
 
-tmux new -d -s btc-trader bash -lc "conda run -n bitcoin-trader --no-capture-output python /Users/ericsmith/Documents/bitcoin-trader/bitcoin-trader.py >> /Users/ericsmith/Documents/bitcoin-trader/trader_run.log 2>&1"
+# Preferred for scheduled runs that only surface downward gaps in the periodic summary:
+# (show only 'down' gaps in the per-interval summary)
+
+tmux new -d -s btc-trader bash -lc "conda run -n bitcoin-trader --no-capture-output python /Users/ericsmith/Documents/bitcoin-trader/bitcoin-trader.py --summary-gaps down >> /Users/ericsmith/Documents/bitcoin-trader/trader_run.log 2>&1"
 
 # Attach to the session to view output live
 tmux attach -t btc-trader
@@ -210,6 +214,7 @@ Flags:
 - `-m, --mode` — detection mode (`strict`, `body`, `open`, `b2dir`). If omitted, the module's default detector is used.
 - `-d, --download-latest` — if provided, the script downloads the latest bars for each timeframe before scanning.
 - `--download-limit` — how many latest bars to fetch when `--download-latest` is used (default: 48).
+- `--gap-type` — which gap types to include in the scan (`both`, `up`, `down`). Default: `both`.
 - `--dry-run` — preview found gaps; do not record to CSV or send Discord messages.
 - `--verbose` — when used, prints the 3-bar window for each candidate gap and the detector output (helpful for debugging).
 - `--output-file` — append verbose/dry-run output to a specified file for later analysis.
