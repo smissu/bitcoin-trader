@@ -159,6 +159,9 @@ Usage examples:
 # start detached and override the number of recent bars used in summary messages
 ./scripts/start_btc_trader.sh -d -r 30  # pass --recent-bars 30 to the strategy
 
+# start detached and show only 'down' gaps in periodic summaries
+./scripts/start_btc_trader.sh -d -g down  # equivalent to --summary-gaps down
+
 # start detached and force display timezone used in messages (e.g. Europe/Berlin or UTC+1)
 ./scripts/start_btc_trader.sh -d -z Europe/Berlin  # messages will show local times in Europe/Berlin (CET/CEST)
 

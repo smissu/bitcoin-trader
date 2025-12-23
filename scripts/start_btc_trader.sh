@@ -12,10 +12,11 @@ LOGFILE="$(pwd)/trader_run.log"
 DETACHED=0
 RECENT_BARS=""  # optional: pass through to bitcoin-trader via --recent-bars
 DISPLAY_TZ=""   # optional: pass through to bitcoin-trader via --display-tz
+SUMMARY_GAPS="" # optional: which gaps to include in periodic summaries (--summary-gaps)
 
 show_help() {
   cat <<EOF
-Usage: $0 [-d] [-s SESSION] [-l LOGFILE] [-r RECENT_BARS] [-z DISPLAY_TZ] [-f FORMAT]
+Usage: $0 [-d] [-s SESSION] [-l LOGFILE] [-r RECENT_BARS] [-z DISPLAY_TZ] [-f FORMAT] [-g SUMMARY_GAPS]
 
 Options:
   -d            Start tmux session detached (default: attached)
@@ -24,11 +25,31 @@ Options:
   -r RECENT_BARS  Pass a --recent-bars value to the strategy (overrides default recent_bars)
   -z DISPLAY_TZ  Pass a --display-tz value to the strategy (e.g. 'Europe/Berlin' or 'UTC+1')
   -f FORMAT     Display tz format: 'full' (UTC + (local)) or 'local' (local-only)
+  -g SUMMARY_GAPS  Which gap types to include in periodic summaries (both, up, down)
   -h            Show this help
 EOF
 }
 
-while getopts ":ds:l:r:z:f:h" opt; do
+# Pre-parse long-form options (support --summary-gaps and --summary-gaps=val)
+TEMP_ARGS=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --summary-gaps)
+      SUMMARY_GAPS="$2"
+      shift 2
+      ;;
+    --summary-gaps=*)
+      SUMMARY_GAPS="${1#*=}"
+      shift
+      ;;
+    *) TEMP_ARGS+=("$1")
+      shift
+      ;;
+  esac
+done
+set -- "${TEMP_ARGS[@]}"
+
+while getopts ":ds:l:r:z:f:g:h" opt; do
   case $opt in
     d) DETACHED=1 ;; 
     s) SESSION_NAME="$OPTARG" ;;
@@ -36,6 +57,7 @@ while getopts ":ds:l:r:z:f:h" opt; do
     r) RECENT_BARS="$OPTARG" ;;
     z) DISPLAY_TZ="$OPTARG" ;;
     f) DISPLAY_TZ_FORMAT="$OPTARG" ;;
+    g) SUMMARY_GAPS="$OPTARG" ;;
     h) show_help; exit 0 ;;
     *) show_help; exit 2 ;;
   esac
@@ -53,6 +75,10 @@ fi
 # Append display tz format if provided
 if [ -n "$DISPLAY_TZ_FORMAT" ]; then
   CMD="$CMD --display-tz-format $DISPLAY_TZ_FORMAT"
+fi
+# Append summary gaps option if provided
+if [ -n "$SUMMARY_GAPS" ]; then
+  CMD="$CMD --summary-gaps $SUMMARY_GAPS"
 fi
 
 if [ "$DETACHED" -eq 1 ]; then
