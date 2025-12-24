@@ -237,10 +237,10 @@ class GapManager:
 class GapStrategy:
     """Main strategy implementation. Detects gaps and monitors them."""
 
-    def __init__(self, symbol='BTC_USDT', timeframes=None, data_dir='data', recent_bars: int = 20, detector_mode: str = 'b2dir', display_tz = None, display_tz_format: str = 'full', summary_gap_type: str = 'both'):
+    def __init__(self, symbol='BTC_USDT', timeframes=None, data_dir='data', recent_bars: int = 4, detector_mode: str = 'b2dir', display_tz = None, display_tz_format: str = 'full', summary_gap_type: str = 'both'):
         """Create a GapStrategy.
 
-        recent_bars: how many recent bars to include in summary messages (default: 20)
+        recent_bars: how many recent bars to include in summary messages (default: 4)
         detector_mode: one of the supported detector modes ('strict','body','open','b2dir')
         display_tz: optional tzinfo to use for message display (default: system local)
         display_tz_format: 'full' (UTC + (local)) or 'local' (local-only)

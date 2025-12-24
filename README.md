@@ -169,7 +169,7 @@ Usage examples:
 ./scripts/start_btc_trader.sh -d -z Europe/Berlin -f local  # messages show local times only (e.g., @19DEC25 - 09:00 CET)
 ```
 
-Note: when the app performs its initial pass on startup it prints already-closed gaps to the terminal and logs them instead of sending Discord notifications (this prevents a flood of "Gap closed" Discord messages at startup). If you prefer the old behavior, scheduled closures still send Discord messages as before. The default summary window uses the last **20** bars; override this with `--recent-bars` on the command line or by passing `recent_bars` when creating `GapStrategy`. The default detector mode is now **b2dir** (this treats a mid-bar directional move as a gap when the next bar does not intersect the prior bar). Override with `--detector-mode` if needed.
+Note: when the app performs its initial pass on startup it prints already-closed gaps to the terminal and logs them instead of sending Discord notifications (this prevents a flood of "Gap closed" Discord messages at startup). If you prefer the old behavior, scheduled closures still send Discord messages as before. The default summary window uses the last **4** bars; override this with `--recent-bars` on the command line or by passing `recent_bars` when creating `GapStrategy`. The default detector mode is now **b2dir** (this treats a mid-bar directional move as a gap when the next bar does not intersect the prior bar). Override with `--detector-mode` if needed.
 
 Note: `Gap found` messages now include timestamps, for example: `Gap found G00073 60M up 88658.22 - 88712.11 @21DEC25 - 13:00:00 UTC (14:00 CET)`. Messages show the gap's start bar time in **UTC** and also include your local timezone (so they match chart labels shown in your trading client). If you run the app in a different timezone, the parenthesized local time will reflect the system local timezone.
 **Alternative: nohup (simple background):**
@@ -183,7 +183,7 @@ tail -f trader_run.log
 **Quick local test (run once):**
 
 ```bash
-# run once with default settings (default recent_bars: 20)
+# run once with default settings (default recent_bars: 4)
 conda run -n bitcoin-trader python bitcoin-trader.py --mode once --timeframes 60M 4H 1D
 
 # or override the recent bars window used in summary messages:
